@@ -8,8 +8,18 @@ project(slamplanning)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
+  roscpp
   rospy
   std_msgs
+  std_srvs
+  message_generation
+
+  tf
+  gazebo_ros
+  gazebo_msgs
+  geometry_msgs
+  nav_msgs
+  sensor_msgs
 )
 
 ## System dependencies are found with CMake's conventions
@@ -53,11 +63,11 @@ find_package(catkin REQUIRED COMPONENTS
 # )
 
 ## Generate services in the 'srv' folder
-# add_service_files(
-#   FILES
-#   Service1.srv
-#   Service2.srv
-# )
+add_service_files(
+	DIRECTORY message/srv
+	FILES
+	SLAMPath.srv
+)
 
 ## Generate actions in the 'action' folder
 # add_action_files(
@@ -71,7 +81,9 @@ find_package(catkin REQUIRED COMPONENTS
 #   DEPENDENCIES
 #   std_msgs
 # )
-
+generate_messages(
+    DEPENDENCIES std_msgs geometry_msgs sensor_msgs nav_msgs roscpp std_srvs tf gazebo_msgs
+)
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
 ################################################
