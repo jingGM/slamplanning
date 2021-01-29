@@ -20,11 +20,20 @@ class RosTopics:
         self.map = "/map"
         self.initialization = "/initialization"
         self.path_planning = "/total_path"
+
+        self.states_topic = "/gazebo/model_states"
+        self.set_service = '/gazebo/set_model_state'
+
+        # self.scan_topic = '/scan'
+        # self.odom_topic = "/jackal_velocity_controller/odom"
+        # self.action_topic = "/jackal_velocity_controller/cmd_vel"
+        # self.robot_name = "jackal"
+
         self.scan_topic = "/scan"
         self.action_topic = "/cmd_vel"
         self.odom_topic = "/odom"
-        self.states_topic = "/gazebo/model_states"
-        self.set_service = '/gazebo/set_model_state'
+        self.robot_name = "turtlebot3"
+
 
 class PathPlannerConfig:
     def __init__(self, robot_radius=0.2, occupancy_threshold=60):

@@ -9,6 +9,7 @@ system requirements:
 ubuntu packages:
 ```
 	sudo apt-get install ros-melodic-turtlebot3*
+	sudo apt-get install ros-melodic-jackal*
 ```
 
 python packages(in Anaconda Environment):

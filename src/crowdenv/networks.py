@@ -89,7 +89,7 @@ class NNModule:
             action[1] = self.velocity_threshold[1][1]
 
         # final_action = self.observation_filter.velocity_wrapper(action)
-
+        # action[1] = -action[1]
         return action
 
 if __name__ == "__main__":

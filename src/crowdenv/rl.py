@@ -19,13 +19,20 @@ from crowdenv.scenarios import Scenarios
 
 class TOPICS(object):
     def __init__(self):
-        self.scan_topic = 'jackal0/scan_filtered'
+
         self.reset_service = '/gazebo/reset_world'
         self.set_service = '/gazebo/set_model_state'
         self.states_topic = "/gazebo/model_states"
 
-        self.odom_topic = "jackal0/jackal_velocity_controller/odom"
-        self.action_topic = "jackal0/jackal_velocity_controller/cmd_vel"
+        # self.scan_topic = 'jackal/scan_filtered'
+        # self.odom_topic = "jackal/jackal_velocity_controller/odom"
+        # self.action_topic = "jackal/jackal_velocity_controller/cmd_vel"
+        # self.name = "jackal"
+
+        self.action_topic = "/cmd_vel"
+        self.scan_topic = "/scan"
+        self.odom_topic = "/odom"
+        self.name = "turtlebot3"
 
 
 class CrowdENV:
@@ -33,12 +40,12 @@ class CrowdENV:
                  scenarios_index=0,
                  collision_threshold=0.22,
                  target_threshold=0.8,
-                 step_time=0.1,
+                 step_time=0.2,
                  max_steps=1000,
                  random_seed=1):
-
+        self.topics = TOPICS()
         self.seed = random_seed
-        self.robot_name = "turtlebot3"
+        self.robot_name = self.topics.name
         self.collision_threshold = collision_threshold
         self.target_threshold = target_threshold
         self.start = None
@@ -51,8 +58,6 @@ class CrowdENV:
 
         self.scenarios = Scenarios()
         self.scenarios_index = scenarios_index
-
-        self.topics = TOPICS()
 
         self.trajectory = []
 
@@ -87,7 +92,6 @@ class CrowdENV:
         self.reward = None
         self.scan = None
         self.rel_goal = None
-        self.last_rel_goal = None
 
         self.terminatec = False
         self.terminateg = False
@@ -127,7 +131,11 @@ class CrowdENV:
                                                 queue_size=1)
 
     def _scan_callback(self, data):
-        lidar_data = np.flip(data.ranges)
+        lidar_data = np.array(data.ranges)
+        lidar_data = np.flip(lidar_data)
+        lidar_data[np.where(np.isnan(lidar_data))] = self.lidar_threshold
+        lidar_data[np.where(np.isinf(lidar_data))] = self.lidar_threshold
+
         scan_single = np.array([lidar_data]).transpose() / self.lidar_threshold
         if self.scan is None:
             self.scan = np.concatenate((copy.deepcopy(scan_single),
@@ -181,7 +189,7 @@ class CrowdENV:
             self.terminates = True
 
         while rospy.get_rostime().to_sec() - self.last_time < self.step_time:
-            pass
+            self.publisher.publish(velocity)
         self.last_time = rospy.get_rostime().to_sec()
 
         obs, done, position = self.get_observation()
@@ -192,6 +200,11 @@ class CrowdENV:
                                 self.position,
                                 rospy.get_rostime(),
                                 (self.terminatec, self.terminateg)])
+
+        while not (self.publisher.get_num_connections() > 0):
+            pass
+        self.publisher.publish(Twist())
+
         return obs, done, position
 
     def get_terminate(self):
@@ -209,11 +222,11 @@ class CrowdENV:
 
 class TrajectoryGenerator:
     def __init__(self, iterations=50):
-        self.env = CrowdENV(scenarios_index=10, max_steps=1000)
-        self.policy = NNModule(velocity_threshold=self.env.vel_threshold, path="./")
+        self.env = CrowdENV(scenarios_index=1, max_steps=1000)
+        self.policy = NNModule(velocity_threshold=self.env.vel_threshold, path="./crowdenv/")
         self.iterations = iterations
 
-    def run(self, scenarios=range(0, 20, 1)):
+    def run(self, scenarios=[1]):
         for i in scenarios:
             self.get_trajectory(i)
 
@@ -256,7 +269,7 @@ class TrajectoryGenerator:
 
 def run_iterations():
     tg = TrajectoryGenerator(10)
-    tg.run([6])
+    tg.run([1])
 
 
 if __name__ == "__main__":

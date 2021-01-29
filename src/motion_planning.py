@@ -7,7 +7,7 @@ import numpy as np
 from geometry_msgs.msg import Twist, Pose, PoseArray
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import Odometry
-from gazebo_msgs.msg import ModelState
+from gazebo_msgs.msg import ModelStates, ModelState
 from gazebo_msgs.srv import SetModelState
 from slamplanning.srv import SLAMPath, SLAMPathRequest, SLAMPathResponse
 
@@ -20,16 +20,20 @@ class MotionPlanner:
     def __init__(self,
                  collision_threshold=0.22,
                  target_threshold=0.8,
-                 step_time=0.1
+                 step_time=0.1,
+                 save_trajectory=False
                  ):
         rospy.init_node("motion_planner", anonymous=True)
-        self.start = np.array([0., -5, 0.])
-        self.robot_name = "turtlebot3"
+        self.start = np.array([0., -5, 3.14])
+        self.topics = RosTopics()
+
+        self.robot_name = self.topics.robot_name
         self.vel_threshold = ((0., 1.), (-1., 1.))
         self.step_time = step_time
         self.collision_threshold = collision_threshold
         self.target_threshold = target_threshold
-        self.topics = RosTopics()
+
+        self.save_trajectory = save_trajectory
 
         self.lidar_threshold = 4.
         self.waypoint_threshold = 1.
@@ -37,7 +41,7 @@ class MotionPlanner:
         self.policy = NNModule(velocity_threshold=self.vel_threshold, path="./crowdenv/")
 
         self.trajectory = []
-        self.path = []
+        self.path = [[-4, -5]]
 
         self.position = None
         self.velocity = None
@@ -67,7 +71,10 @@ class MotionPlanner:
         self.reward = None
         self.scan = None
         self.rel_goal = None
-        self.goal = [10, -5]
+        self.goal = [-4, -7]
+
+        self.trajectory = []
+        self.path = [[-4, -7]]
 
         self.terminatec = False
         self.terminateg = False
@@ -102,6 +109,8 @@ class MotionPlanner:
 
         self.odom_subscriber = rospy.Subscriber(self.topics.odom_topic, Odometry, self._odom_callback, queue_size=1)
 
+        self.pose_subscriber = rospy.Subscriber(self.topics.states_topic, ModelStates, self._state_callback,
+                                                queue_size=1)
         # self.path_subscriber = rospy.Subscriber(self.topics.path_planning, PoseArray, self._path_callback, queue_size=1)
         self.path_service = rospy.Service(self.topics.path_planning, SLAMPath, self._path_callback)
 
@@ -117,26 +126,32 @@ class MotionPlanner:
         success.success = True
         return success
 
+    def _state_callback(self, states):
+        for i in range(len(states.name)):
+            if states.name[i] == self.robot_name:
+                self.position = states.pose[i]
+
     def _scan_callback(self, data):
-        lidar_data = np.flip(data.ranges)
+        # lidar_data = np.flip(data.ranges)
+        lidar_data = np.asarray(data.ranges)
         lidar_data = np.where(np.isinf(lidar_data), self.lidar_threshold, lidar_data)
-        lidar_data = np.where(np.isnan(lidar_data), self.lidar_threshold, lidar_data)
+        lidar_data = np.where(np.isnan(lidar_data), 0, lidar_data)
         lidar_data = np.where(lidar_data < 0., 0., lidar_data)
 
-        scan_single = np.array([lidar_data]).transpose() / self.lidar_threshold
+        scan_single = np.array([lidar_data]).transpose() / 2 #/ self.lidar_threshold
         if self.scan is None:
             self.scan = np.concatenate((copy.deepcopy(scan_single),
                                         copy.deepcopy(scan_single),
                                         copy.deepcopy(scan_single)), axis=1)
         else:
-            self.scan = np.concatenate((self.scan[:, 1:], scan_single), axis=1)
+            self.scan = np.concatenate((scan_single, self.scan[:, 0:2], ), axis=1)
         min_dis_collision = lidar_data.min()
         if min_dis_collision < self.collision_threshold:
             self.terminatec = True
             self.publisher.publish(Twist())
 
     def _odom_callback(self, data: Odometry):
-        self.position = data.pose.pose
+        # self.position = data.pose.pose
         self.velocity = np.array([data.twist.twist.linear.x, data.twist.twist.angular.z])
 
     def _extract_nearest_goal(self):
@@ -183,12 +198,18 @@ class MotionPlanner:
 
         obs, done, position = self.get_observation()
 
-        self.trajectory.append([obs,
-                                action,
-                                self.step_size,
-                                self.position,
-                                rospy.get_rostime(),
-                                (self.terminatec, self.terminateg)])
+        # velocity = Twist()
+        # while not (self.publisher.get_num_connections() > 0):
+        #     pass
+        # self.publisher.publish(velocity)
+
+        if self.save_trajectory:
+            self.trajectory.append([obs,
+                                    action,
+                                    self.step_size,
+                                    self.position,
+                                    rospy.get_rostime(),
+                                    (self.terminatec, self.terminateg)])
         return obs, done, position
 
     def run(self):
